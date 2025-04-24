@@ -514,12 +514,12 @@ class SubscriptionController extends GetxController {
     printAction("-----> try <------");
     try {
       await FlutterInappPurchase.instance.getAvailablePurchases().timeout(
-        Duration(seconds: 10),
+        Duration(seconds: 30),
         onTimeout: () async {
           apiRepeatCount++;
           printAction("----- apiRepeatCount = $apiRepeatCount ------");
 
-          if (apiRepeatCount < 3) restorePurchasePlan(isShowLoading: isShowLoading);
+          if (apiRepeatCount < 2) restorePurchasePlan(isShowLoading: isShowLoading);
           return null;
         },
       ).then(
@@ -528,7 +528,7 @@ class SubscriptionController extends GetxController {
           printAction("----- apiRepeatCount = $apiRepeatCount ------");
 
           if (list == null) {
-            if (apiRepeatCount >= 3) {
+            if (apiRepeatCount >= 2) {
               if (isShowLoading) utils.showToast(message: "Please try again after some time.");
               if (isShowLoading) Loading.dismiss();
               apiRepeatCount = 0;
