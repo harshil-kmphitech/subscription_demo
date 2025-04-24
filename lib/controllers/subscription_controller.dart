@@ -50,11 +50,11 @@ class SubscriptionController extends GetxController {
   bool isRestore = true; // This variable is used to stop multiple api call from the stream
   bool isShowFreeTrial = false; // This variable is used to get the status of free trial
 
-  Future<void> loginApi() async {
+  Future<void> loginApi({bool isHarshil = true}) async {
     await getIt<AuthService>()
         .login(
       pass: '123456',
-      email: Platform.isAndroid ? 'harshil.kmphitech@gmail.com' : 'mayur.kmphasis@gmail.com',
+      email: isHarshil ? 'harshil.kmphitech@gmail.com' : 'mayur.kmphasis@gmail.com',
     )
         .handler(
       null,

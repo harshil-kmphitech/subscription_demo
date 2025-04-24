@@ -29,6 +29,7 @@ class SubscriptionScreen extends StatelessWidget {
                 return Center(
                   child: Column(
                     children: [
+                      Text('name: ${controller.user.data?.name}'),
                       Text('isSubscription: ${controller.user.data?.isSubscription}'),
                       Text('isFreeTrialUsed: ${controller.user.data?.isFreeTrialUsed}'),
                       Text('productId: ${controller.user.data?.productId}'),
@@ -42,8 +43,12 @@ class SubscriptionScreen extends StatelessWidget {
 
             //
             ElevatedButton(
-              onPressed: () => controller.loginApi(),
-              child: const Text('Login'),
+              onPressed: () => controller.loginApi(isHarshil: false),
+              child: const Text('Mayur Login'),
+            ),
+            ElevatedButton(
+              onPressed: () => controller.loginApi(isHarshil: true),
+              child: const Text('Harshil Login'),
             ),
             ElevatedButton(
               onPressed: () => controller.checkUserPlanApi(),
