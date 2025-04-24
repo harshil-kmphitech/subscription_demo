@@ -46,14 +46,15 @@ class SubscriptionController extends GetxController {
   ProductDetailsResponse? response;
   RxInt selectedPlanIndex = 0.obs;
   ProductDetails? currentPlan;
-  bool isPurchased = true; // This variable is to stop multiple api call from the stream
-  bool isRestore = true; // This variable is to stop multiple api call from the stream
+  bool isPurchased = true; // This variable is used to stop multiple api call from the stream
+  bool isRestore = true; // This variable is used to stop multiple api call from the stream
+  bool isShowFreeTrial = false; // This variable is used to get the status of free trial
 
   Future<void> loginApi() async {
     await getIt<AuthService>()
         .login(
       pass: '123456',
-      email: 'mayur.kmphasis@gmail.com',
+      email: Platform.isAndroid ? 'harshil.kmphitech@gmail.com' : 'mayur.kmphasis@gmail.com',
     )
         .handler(
       null,
@@ -71,17 +72,19 @@ class SubscriptionController extends GetxController {
     );
   }
 
+  /// This function is used to check the user plan
   Future<void> checkUserPlanApi() async {
-    // if user already has a plan then we will not do anything
-    if (user.data?.isSubscription == '1') return;
+    if (utils.isValueEmpty(user.data?.id)) await loginApi();
+
+    // if user already has a plan and it's not expired then we will not do anything
+    var expiryDate = DateTime.tryParse(user.data?.planExpiry ?? '') ?? DateTime.now();
+    var isPlanExpired = expiryDate.isBefore(DateTime.now());
+    if (user.data?.isSubscription == '1' && !isPlanExpired) return;
 
     await getIt<SubscriptionService>().checkUserPlanApi().handler(
       null,
       onSuccess: (value) async {
         if (value.data == null) return;
-
-        // You can remove this line if you don't want to show the plan to the user
-        getIt<SharedPreferences>().setToken = value.data?.token;
 
         if (!utils.isValueEmpty(value.data?.planExpiry)) {
           var expiryDate = DateTime.tryParse(value.data?.planExpiry ?? '') ?? DateTime.now();
@@ -94,11 +97,9 @@ class SubscriptionController extends GetxController {
         }
         user = value;
 
-        if (value.data?.isSubscription == '1') {
-          fetchSubscriptions();
-        } else {
+        if (value.data?.isSubscription != '1') {
           apiRepeatCount = 0;
-          // If user does not have any subscription plan so here we check if user has purchased any plan in the store
+          // If user does not have any subscription plan so here we check if user has purchased any plan in the store and if user has any plan then we call the restore api
           Platform.isAndroid ? restorePurchasePlanAndroid(isShowLoading: false) : restorePurchasePlan(isShowLoading: false);
         }
 
@@ -128,7 +129,6 @@ class SubscriptionController extends GetxController {
         if (stream == null) await subscriptionStream();
         isPurchased = false;
 
-        if (utils.isValueEmpty(user.data?.id)) await loginApi();
         await InAppPurchase.instance.restorePurchases(applicationUserName: user.data?.id);
         printAction('-------555');
       } catch (e) {
@@ -145,11 +145,18 @@ class SubscriptionController extends GetxController {
   Future<void> onPurchasePress() async {
     /// If user already purchased any plan then user can't select purchased plan
     /// ex: if user purchased monthly plan then user can't select monthly plan; Make the other plan selected
+    if (user.data?.productId?.contains('monthly') ?? false) {
+      if (selectedPlanIndex.value == 0) return;
+    }
+    if (user.data?.productId?.contains('yearly') ?? false) {
+      if (selectedPlanIndex.value == 1) return;
+    }
 
+    apiRepeatCount = 0;
     isPurchased = false;
     await fetchSubscriptions();
     if (stream == null) await subscriptionStream();
-    purchaseBottomSheet();
+    Platform.isAndroid ? purchaseBottomSheet() : restorePurchasePlan(isFromPurchase: true);
   }
 
   Future<void> fetchSubscriptions() async {
@@ -227,7 +234,7 @@ class SubscriptionController extends GetxController {
         printWarning("--- element.verificationData.source = ${element.verificationData.source}");
         printWarning("--- element.pendingCompletePurchase = ${element.pendingCompletePurchase}");
 
-        if (element.pendingCompletePurchase) {
+        if (element.status == PurchaseStatus.purchased && element.pendingCompletePurchase) {
           printSuccess("");
           printSuccess("--- element.status=${element.status}");
           printSuccess("--- element.pendingCompletePurchase=${element.pendingCompletePurchase}");
@@ -245,14 +252,14 @@ class SubscriptionController extends GetxController {
 
           if (Platform.isIOS) {
             if (element.error?.details?['NSUnderlyingError']?['userInfo']?['NSLocalizedFailureReason'] == "You are currently subscribed to this") {
-              restorePurchasePlan();
+              await restorePurchasePlan();
             }
           } else if (Platform.isAndroid) {
             printError("---element.error?.message=${element.error?.message}");
 
             if (element.error?.message == "BillingResponse.itemAlreadyOwned") {
               isRestore = false;
-              if (utils.isValueEmpty(user.data?.id)) await loginApi();
+
               await InAppPurchase.instance.restorePurchases(applicationUserName: user.data?.id);
             }
           }
@@ -290,13 +297,13 @@ class SubscriptionController extends GetxController {
 
           if (Platform.isAndroid) {
             printAction("-----event.length=${event.length}");
-            if (element == event.elementAt(event.length - 1)) {
+            if (element == event.last) {
               printAction("-----isRestore=$isRestore");
 
               if (!isRestore) {
                 isRestore = true;
 
-                restorePurchasePlanAndroid(orderId2: jsonDecode(element.verificationData.localVerificationData)['orderId'].toString());
+                restorePurchasePlanAndroid();
               }
             }
           }
@@ -328,7 +335,7 @@ class SubscriptionController extends GetxController {
       if (response?.productDetails[i].id.trim() == planId) {
         printWarning("----- response?.productDetails[i].id.trim() == planId = ${response?.productDetails[i].id.trim() == planId}");
         printWarning("----- user.data?.id = ${user.data?.id}");
-        if (utils.isValueEmpty(user.data?.id)) await loginApi();
+
         purchaseParam = PurchaseParam(productDetails: response!.productDetails[i], applicationUserName: user.data?.id);
         printAction("----- purchaseBottomSheet purchaseParam.productDetails.id = ${purchaseParam.productDetails.id}");
         break;
@@ -391,6 +398,10 @@ class SubscriptionController extends GetxController {
       return;
     }
 
+    for (var l in list) {
+      printWarning('---=== List = ${l.productId} --- ${l.transactionDate}');
+    }
+
     for (int i = 0; i < list.length; i++) {
       printAction("\n productItem.productID ------> ${productItem.productID}");
       printAction("currentPlan?.id ------> ${currentPlan?.id}");
@@ -398,6 +409,7 @@ class SubscriptionController extends GetxController {
       printAction("list[i].productId ---condition--->${list[i].productId}");
       printAction("list[i].productId ---transactionId--->${list[i].transactionId}");
       printAction("list[i].productId ---transactionDate--->${list[i].transactionDate}");
+      printAction("list[i].productId ---transactionStateIOS--->${list[i].transactionStateIOS}");
       printAction("currentPlan?.rawPrice--->${currentPlan?.rawPrice}");
 
       if (productItem.productID.trim() == list[i].productId?.trim()) {
@@ -486,8 +498,12 @@ class SubscriptionController extends GetxController {
     printAction("--- purchaseAndroidPlan api call end ");
   }
 
-  restorePurchasePlan({bool isShowLoading = true}) async {
+  restorePurchasePlan({bool isShowLoading = true, bool isFromPurchase = false}) async {
     printAction("--- restorePurchasePlan api call start ");
+    printAction("--- isShowLoading = $isShowLoading --- isFromPurchase = $isFromPurchase");
+
+    stream?.cancel();
+    stream = null;
 
     if (isShowLoading) Loading.show();
 
@@ -498,19 +514,27 @@ class SubscriptionController extends GetxController {
     printAction("-----> try <------");
     try {
       await FlutterInappPurchase.instance.getAvailablePurchases().timeout(
-        Duration(seconds: 30),
+        Duration(seconds: 10),
         onTimeout: () async {
           apiRepeatCount++;
           printAction("----- apiRepeatCount = $apiRepeatCount ------");
 
-          if (apiRepeatCount < 2) restorePurchasePlan(isShowLoading: isShowLoading);
+          if (apiRepeatCount < 3) restorePurchasePlan(isShowLoading: isShowLoading);
           return null;
         },
       ).then(
         (list) async {
           printAction("list -----> length ------> ${list?.length}");
+          printAction("----- apiRepeatCount = $apiRepeatCount ------");
 
-          if (list == null) return;
+          if (list == null) {
+            if (apiRepeatCount >= 3) {
+              if (isShowLoading) utils.showToast(message: "Please try again after some time.");
+              if (isShowLoading) Loading.dismiss();
+              apiRepeatCount = 0;
+            }
+            return;
+          }
 
           if (list.isNotEmpty) {
             list.sort((a, b) => b.transactionDate!.compareTo(a.transactionDate!));
@@ -531,6 +555,11 @@ class SubscriptionController extends GetxController {
             }
 
             if (utils.isValueEmpty(originalTransactionId) || utils.isValueEmpty(appleTransactionId)) {
+              if (isFromPurchase) {
+                purchaseBottomSheet();
+                return;
+              }
+
               if (isShowLoading) utils.showToast(message: "Currently, you have no plans.");
               if (isShowLoading) Loading.dismiss();
               return;
@@ -538,6 +567,7 @@ class SubscriptionController extends GetxController {
 
             await getIt<SubscriptionService>()
                 .applePlanRestoreApi(
+              isNewUser: isFromPurchase,
               productId: productId ?? '-',
               appleTransactionId: appleTransactionId ?? '-',
               originalTransactionId: originalTransactionId ?? '-',
@@ -556,6 +586,12 @@ class SubscriptionController extends GetxController {
               },
               onFailed: (value) {
                 tempCount.value++;
+
+                if (value.statusCode == 327 && isFromPurchase) {
+                  purchaseBottomSheet();
+                  return;
+                }
+
                 if (value.statusCode == 404) {
                   if (isShowLoading) utils.showToast(message: "Currently, you have no plans.");
                   return;
@@ -565,6 +601,11 @@ class SubscriptionController extends GetxController {
               },
             );
           } else {
+            if (isFromPurchase) {
+              purchaseBottomSheet();
+              return;
+            }
+
             if (isShowLoading) utils.showToast(message: "Currently, you have no plans");
             if (isShowLoading) Loading.dismiss();
           }
@@ -579,8 +620,11 @@ class SubscriptionController extends GetxController {
     }
   }
 
-  restorePurchasePlanAndroid({String? orderId2, bool isShowLoading = true}) async {
+  restorePurchasePlanAndroid({bool isShowLoading = true}) async {
     printAction("--- restorePurchasePlanAndroid api call start ");
+
+    stream?.cancel();
+    stream = null;
 
     String? purchaseToken;
     String? productId;
@@ -593,7 +637,7 @@ class SubscriptionController extends GetxController {
           apiRepeatCount++;
           printAction("----- apiRepeatCount = $apiRepeatCount ------");
 
-          if (apiRepeatCount < 2) restorePurchasePlanAndroid(orderId2: orderId2, isShowLoading: isShowLoading);
+          if (apiRepeatCount < 2) restorePurchasePlanAndroid(isShowLoading: isShowLoading);
           return null;
         },
       ).then(
@@ -603,6 +647,8 @@ class SubscriptionController extends GetxController {
           if (list == null) return;
 
           if (list.isNotEmpty) {
+            list.sort((a, b) => b.transactionDate!.compareTo(a.transactionDate!));
+
             for (int i = 0; i < list.length; i++) {
               printAction("list[i].productId ---condition--->${list[i].productId}");
               printAction("list[i].productId ---transactionId--->${list[i].purchaseToken}");
@@ -654,12 +700,60 @@ class SubscriptionController extends GetxController {
     }
   }
 
+  checkFreeTrial({bool isShowLoading = true}) async {
+    printAction("--- checkFreeTrial api call start ");
+
+    if (isShowLoading) Loading.show();
+
+    printAction("-----> try <------");
+    try {
+      await FlutterInappPurchase.instance
+          .getPurchaseHistory()
+          .timeout(
+            Duration(seconds: 30),
+            onTimeout: () => null,
+          )
+          .then(
+        (list) async {
+          printAction("list -----> length ------> ${list?.length}");
+
+          if (list == null) return;
+
+          if (list.isEmpty) {
+            isShowFreeTrial = true;
+          } else {
+            // This is free trial plan id
+            final planId = Platform.isAndroid ? "yearly_plan" : "com.app.soakstream.yearlyplan";
+
+            for (int i = 0; i < list.length; i++) {
+              printAction("list[i].productId ---condition--->${list[i].productId}");
+
+              if (list[i].productId == planId) {
+                isShowFreeTrial = false;
+                break;
+              }
+              isShowFreeTrial = true;
+            }
+          }
+          if (isShowLoading) Loading.dismiss();
+        },
+      );
+    } catch (e) {
+      printError("-----eeeeeee5555555=$e");
+      if (isShowLoading) Loading.dismiss();
+      // if (isShowLoading) utils.showToast(message: "$e", isError: true);
+    } finally {
+      if (isShowLoading) Loading.dismiss();
+    }
+  }
+
   @override
   void onInit() {
     try {
       checkUserPlanApi();
       fetchSubscriptions();
-      subscriptionStream();
+      // subscriptionStream();
+      FlutterInappPurchase.instance.initialize();
     } catch (e) {
       printError("----- onInit Catch error = $e");
     }

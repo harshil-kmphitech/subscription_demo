@@ -32,7 +32,7 @@ class SubscriptionScreen extends StatelessWidget {
                       Text('isSubscription: ${controller.user.data?.isSubscription}'),
                       Text('isFreeTrialUsed: ${controller.user.data?.isFreeTrialUsed}'),
                       Text('productId: ${controller.user.data?.productId}'),
-                      Text('planExpiry: ${Utils().getFormatedDate(dateFormate: 'yyyy-MM-dd hh:mm:ss', date: controller.user.data?.planExpiry)}'),
+                      Text('planExpiry: ${utils.getFormatedDate(dateFormate: 'yyyy-MM-dd hh:mm:ss', date: controller.user.data?.planExpiry)}'),
                       SizedBox(height: 10),
                     ],
                   ),

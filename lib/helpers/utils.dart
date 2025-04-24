@@ -39,7 +39,7 @@ class Utils {
   String getDeviceType() => Platform.isAndroid ? "android" : "iOS";
 
   String getFormatedDate({String? date, required String dateFormate}) {
-    if (utils.isValueEmpty(date)) date = '${DateTime.now()}';
+    if (utils.isValueEmpty(date)) return '';
 
     var newDate = DateFormat(dateFormate).format(DateTime.parse(date ?? '${DateTime.now()}').toLocal());
 

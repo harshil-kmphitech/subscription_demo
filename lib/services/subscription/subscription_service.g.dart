@@ -147,6 +147,7 @@ class _SubscriptionService implements SubscriptionService {
 
   @override
   Future<AuthModel> applePlanRestoreApi({
+    required bool isNewUser,
     required String productId,
     required String appleTransactionId,
     required String originalTransactionId,
@@ -155,6 +156,7 @@ class _SubscriptionService implements SubscriptionService {
     final queryParameters = <String, dynamic>{};
     final _headers = <String, dynamic>{};
     final _data = {
+      'isNewUser': isNewUser,
       'productId': productId,
       'appleTransactionId': appleTransactionId,
       'originalTransactionId': originalTransactionId,

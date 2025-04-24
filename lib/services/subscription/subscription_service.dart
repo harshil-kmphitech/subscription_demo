@@ -37,6 +37,7 @@ abstract class SubscriptionService {
 
   @POST(EndPoints.inapppurchaseApplePlanRestore)
   Future<AuthModel> applePlanRestoreApi({
+    @Field() required bool isNewUser,
     @Field() required String productId,
     @Field() required String appleTransactionId,
     @Field() required String originalTransactionId,
