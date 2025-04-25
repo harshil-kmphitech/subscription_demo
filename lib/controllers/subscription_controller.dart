@@ -32,14 +32,14 @@ class SubscriptionController extends GetxController {
       isSelected: false.obs,
       isPurchased: false.obs,
     ),
-    SubscriptionModel(
-      id: "life_time_plan",
-      amount: '',
-      title: 'Lifetime Plan',
-      description: '/life_time',
-      isSelected: false.obs,
-      isPurchased: false.obs,
-    ),
+    // SubscriptionModel(
+    //   id: "life_time_plan",
+    //   amount: '',
+    //   title: 'Lifetime Plan',
+    //   description: '/life_time',
+    //   isSelected: false.obs,
+    //   isPurchased: false.obs,
+    // ),
   ].obs;
 
   StreamSubscription? stream;
@@ -168,7 +168,7 @@ class SubscriptionController extends GetxController {
       Set<String> subscriptionIds = <String>{
         Platform.isAndroid ? 'monthly_plan' : "com.app.soakstream.monthlyplan",
         Platform.isAndroid ? 'yearly_plan' : "com.app.soakstream.yearlyplan",
-        "life_time_plan",
+        // "life_time_plan",
       };
 
       response = await InAppPurchase.instance.queryProductDetails(subscriptionIds);
@@ -212,104 +212,114 @@ class SubscriptionController extends GetxController {
     stream?.cancel();
     stream = null;
 
-    await FlutterInappPurchase.instance.initialize();
+    stream = InAppPurchase.instance.purchaseStream.listen(
+      (event) async {
+        printAction("--- event.length ${event.length}");
 
-    stream = InAppPurchase.instance.purchaseStream.listen((event) async {
-      printAction("--- event.length ${event.length}");
-
-      if (event.isEmpty) {
-        printWarning("------> event.isEmpty <------");
-
-        Loading.dismiss();
-        utils.showToast(message: "Currently, you have no plans.");
-      }
-
-      // ignore: avoid_function_literals_in_foreach_calls
-      event.forEach((element) async {
-        printWarning("--- element.status = ${element.status}");
-        printWarning("--- element.error = ${element.error}");
-        printWarning("--- element.productID = ${element.productID}");
-        printWarning("--- element.purchaseID = ${element.purchaseID}");
-        printWarning("--- element.transactionDate = ${element.transactionDate}");
-        printWarning("--- element.verificationData.source = ${element.verificationData.source}");
-        printWarning("--- element.pendingCompletePurchase = ${element.pendingCompletePurchase}");
-
-        if (element.status == PurchaseStatus.purchased && element.pendingCompletePurchase) {
-          printSuccess("");
-          printSuccess("--- element.status=${element.status}");
-          printSuccess("--- element.pendingCompletePurchase=${element.pendingCompletePurchase}");
-          printSuccess("");
-          try {
-            await InAppPurchase.instance.completePurchase(element);
-            printSuccess("--- completePurchase done ---");
-          } catch (e) {
-            printError("CompletePurchase catch error: $e");
-          }
-        }
-
-        if (element.status == PurchaseStatus.error || element.status == PurchaseStatus.canceled) {
-          printAction("API CALLED 1 - PurchaseStatus.error || PurchaseStatus.canceled");
-
-          if (Platform.isIOS) {
-            if (element.error?.details?['NSUnderlyingError']?['userInfo']?['NSLocalizedFailureReason'] == "You are currently subscribed to this") {
-              await restorePurchasePlan();
-            }
-          } else if (Platform.isAndroid) {
-            printError("---element.error?.message=${element.error?.message}");
-
-            if (element.error?.message == "BillingResponse.itemAlreadyOwned") {
-              isRestore = false;
-
-              await InAppPurchase.instance.restorePurchases(applicationUserName: user.data?.id);
-            }
-          }
+        if (event.isEmpty) {
+          printWarning("------> event.isEmpty <------");
 
           Loading.dismiss();
-        } else if (element.status == PurchaseStatus.pending) {
-          printAction("API CALLED 2 - PurchaseStatus.pending");
-        } else if (element.status == PurchaseStatus.purchased) {
-          printAction("API CALLED 3 - PurchaseStatus.purchased");
+          utils.showToast(message: "Currently, you have no plans.");
+        }
 
-          if (!isPurchased) {
-            isPurchased = true;
-            printAction("API CALLED 4");
+        // ignore: avoid_function_literals_in_foreach_calls
+        event.forEach((element) async {
+          printWarning("--- element.status = ${element.status}");
+          printWarning("--- element.error = ${element.error}");
+          printWarning("--- element.productID = ${element.productID}");
+          printWarning("--- element.purchaseID = ${element.purchaseID}");
+          printWarning("--- element.transactionDate = ${element.transactionDate}");
+          printWarning("--- element.verificationData.source = ${element.verificationData.source}");
+          printWarning("--- element.pendingCompletePurchase = ${element.pendingCompletePurchase}");
 
-            if (Platform.isIOS) {
-              printAction("API CALLED 6");
-
-              apiRepeatCount = 0;
-              purchasePlan(element);
-            } else {
-              printAction("API CALLED 5");
-              printAction("--- element.productID = ${element.productID}");
-              printAction("jsonDecoded orderId = ${jsonDecode(element.verificationData.localVerificationData)['orderId']}");
-
-              purchaseAndroidPlan(
-                type: "purchase",
-                productId: element.productID,
-                orderId: jsonDecode(element.verificationData.localVerificationData)['orderId'],
-                purchaseToken: jsonDecode(element.verificationData.localVerificationData)['purchaseToken'],
-              );
+          if (element.pendingCompletePurchase) {
+            printSuccess("");
+            printSuccess("--- element.status=${element.status}");
+            printSuccess("--- element.pendingCompletePurchase=${element.pendingCompletePurchase}");
+            printSuccess("");
+            try {
+              await InAppPurchase.instance.completePurchase(element);
+              printSuccess("--- completePurchase done ---");
+            } catch (e) {
+              printError("--- CompletePurchase catch error: $e");
             }
           }
-        } else if (element.status == PurchaseStatus.restored) {
-          printAction("API CALLED 0 - PurchaseStatus.restored");
 
-          if (Platform.isAndroid) {
-            printAction("-----event.length=${event.length}");
-            if (element == event.last) {
-              printAction("-----isRestore=$isRestore");
+          if (element.status == PurchaseStatus.error || element.status == PurchaseStatus.canceled) {
+            printAction("API CALLED 1 - PurchaseStatus.error || PurchaseStatus.canceled");
 
-              if (!isRestore) {
-                isRestore = true;
+            if (Platform.isIOS) {
+              if (element.error?.details?['NSUnderlyingError']?['userInfo']?['NSLocalizedFailureReason'] == "You are currently subscribed to this") {
+                await restorePurchasePlan();
+              }
+            } else if (Platform.isAndroid) {
+              printError("---element.error?.message=${element.error?.message}");
 
-                restorePurchasePlanAndroid();
+              if (element.error?.message == "BillingResponse.itemAlreadyOwned") {
+                isRestore = false;
+
+                await InAppPurchase.instance.restorePurchases(applicationUserName: user.data?.id);
+              }
+            }
+
+            Loading.dismiss();
+          } else if (element.status == PurchaseStatus.pending) {
+            printAction("API CALLED 2 - PurchaseStatus.pending");
+          } else if (element.status == PurchaseStatus.purchased) {
+            printAction("API CALLED 3 - PurchaseStatus.purchased");
+
+            if (!isPurchased) {
+              isPurchased = true;
+              printAction("API CALLED 4");
+
+              if (Platform.isIOS) {
+                printAction("API CALLED 6");
+
+                apiRepeatCount = 0;
+                purchasePlan(element);
+              } else {
+                printAction("API CALLED 5");
+                printAction("--- element.productID = ${element.productID}");
+                printAction("jsonDecoded orderId = ${jsonDecode(element.verificationData.localVerificationData)['orderId']}");
+
+                purchaseAndroidPlan(
+                  type: "purchase",
+                  productId: element.productID,
+                  orderId: jsonDecode(element.verificationData.localVerificationData)['orderId'],
+                  purchaseToken: jsonDecode(element.verificationData.localVerificationData)['purchaseToken'],
+                );
+              }
+            }
+          } else if (element.status == PurchaseStatus.restored) {
+            printAction("API CALLED 0 - PurchaseStatus.restored");
+
+            if (Platform.isAndroid) {
+              printAction("-----event.length=${event.length}");
+              if (element == event.last) {
+                printAction("-----isRestore=$isRestore");
+
+                if (!isRestore) {
+                  isRestore = true;
+
+                  restorePurchasePlanAndroid();
+                }
               }
             }
           }
-        }
-      });
-    });
+        });
+      },
+      onDone: () {
+        printAction("----- subscriptionStream onDone");
+        stream?.cancel();
+        stream = null;
+        Loading.dismiss();
+      },
+      onError: (error) {
+        printError("----- subscriptionStream onError = $error");
+        Loading.dismiss();
+      },
+    );
 
     printAction('----- subscriptionStream end');
   }
@@ -319,6 +329,8 @@ class SubscriptionController extends GetxController {
     var planId = subscriptionList[selectedPlanIndex.value].id;
     printWarning("----- purchaseBottomSheet planId = $planId");
 
+    await fetchSubscriptions();
+
     currentPlan = response?.productDetails.firstWhere(
       (pd) => pd.id.contains(selectedPlanIndex.value == 0 ? 'monthly' : 'yearly'),
     );
@@ -327,6 +339,7 @@ class SubscriptionController extends GetxController {
 
     printAction("----- response == null = ${response == null}");
     if (response == null) await fetchSubscriptions();
+    if (stream == null) await subscriptionStream();
 
     printAction("----- response?.productDetails.length = ${response?.productDetails.length}");
     for (int i = 0; i < (response?.productDetails.length ?? 0); i++) {
@@ -346,12 +359,16 @@ class SubscriptionController extends GetxController {
       printAction("----- purchaseBottomSheet purchaseParam is null = ${purchaseParam == null}");
       if (purchaseParam != null) {
         await InAppPurchase.instance.buyNonConsumable(purchaseParam: purchaseParam);
+        printAction("----- buyNonConsumable done");
       } else {
         Loading.dismiss();
-        utils.showToast(message: "Something went wrong. Please try again later.");
+        utils.showToast(message: "Something went wrong; Please try again later.");
       }
     } catch (e) {
       printAction("----- purchaseBottomSheet catch error = $e");
+      stream?.cancel();
+      stream = null;
+
       Loading.dismiss();
 
       if (e is PlatformException) {
@@ -362,7 +379,7 @@ class SubscriptionController extends GetxController {
         printWarning("----- ");
 
         if (e.code == 'storekit_duplicate_product_object') {
-          utils.showToast(message: "You already purchased this plan.");
+          utils.showToast(message: "You can't purchase this plan at the moment. Please try again later.");
           return;
         }
 
@@ -549,10 +566,16 @@ class SubscriptionController extends GetxController {
                 printAction("----- if if if if if");
                 originalTransactionId = list[i].originalTransactionIdentifierIOS;
                 appleTransactionId = list[i].transactionId;
-                productId = list[i].productId;
+                if (!isFromPurchase) productId = list[i].productId;
                 break;
               }
             }
+
+            if (isFromPurchase) productId = subscriptionList[selectedPlanIndex.value].id;
+
+            printAction('----productId=$productId');
+            printAction('----appleTransactionId=$appleTransactionId');
+            printAction('----originalTransactionId=$originalTransactionId');
 
             if (utils.isValueEmpty(originalTransactionId) || utils.isValueEmpty(appleTransactionId)) {
               if (isFromPurchase) {
@@ -752,8 +775,12 @@ class SubscriptionController extends GetxController {
     try {
       checkUserPlanApi();
       fetchSubscriptions();
-      // subscriptionStream();
-      FlutterInappPurchase.instance.initialize();
+
+      FlutterInappPurchase.instance.finalize().then((value) async {
+        printAction("----- FlutterInappPurchase finalize value = $value");
+        final val = await FlutterInappPurchase.instance.initialize();
+        printAction("----- FlutterInappPurchase initialize value = $val");
+      });
     } catch (e) {
       printError("----- onInit Catch error = $e");
     }
@@ -765,6 +792,7 @@ class SubscriptionController extends GetxController {
   void onClose() {
     stream?.cancel();
     stream = null;
+    FlutterInappPurchase.instance.finalize();
 
     super.onClose();
   }
