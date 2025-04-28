@@ -154,7 +154,7 @@ class SubscriptionController extends GetxController {
 
     apiRepeatCount = 0;
     isPurchased = false;
-    await fetchSubscriptions();
+    if (response == null) await fetchSubscriptions();
     if (stream == null) await subscriptionStream();
     Platform.isAndroid ? purchaseBottomSheet() : restorePurchasePlan(isFromPurchase: true);
   }
@@ -328,8 +328,6 @@ class SubscriptionController extends GetxController {
     Loading.show();
     var planId = subscriptionList[selectedPlanIndex.value].id;
     printWarning("----- purchaseBottomSheet planId = $planId");
-
-    await fetchSubscriptions();
 
     currentPlan = response?.productDetails.firstWhere(
       (pd) => pd.id.contains(selectedPlanIndex.value == 0 ? 'monthly' : 'yearly'),
