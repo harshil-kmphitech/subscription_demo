@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:fluttertoast/fluttertoast.dart';
@@ -53,9 +54,9 @@ class Utils {
 void printSuccess(String text) {
   if (kDebugMode) {
     if (Platform.isAndroid) {
-      debugPrint('\x1B[32m$text\x1B[0m');
+      log('\x1B[32m$text\x1B[0m');
     } else {
-      debugPrint(text);
+      log(text);
     }
   }
 }
@@ -63,9 +64,9 @@ void printSuccess(String text) {
 void printWarning(String text) {
   if (kDebugMode) {
     if (Platform.isAndroid) {
-      debugPrint('\x1B[33m$text\x1B[0m');
+      log('\x1B[33m$text\x1B[0m');
     } else {
-      debugPrint(text);
+      log(text);
     }
   }
 }
@@ -73,9 +74,9 @@ void printWarning(String text) {
 void printAction(String text) {
   if (kDebugMode) {
     if (Platform.isAndroid) {
-      debugPrint('\x1B[94m$text\x1B[0m');
+      log('\x1B[94m$text\x1B[0m');
     } else {
-      debugPrint(text);
+      log(text);
     }
   }
 }
@@ -83,9 +84,9 @@ void printAction(String text) {
 void printError(String text) {
   if (kDebugMode) {
     if (Platform.isAndroid) {
-      debugPrint('\x1B[91m$text\x1B[0m');
+      log('\x1B[91m$text\x1B[0m');
     } else {
-      debugPrint(text);
+      log(text);
     }
   }
 }

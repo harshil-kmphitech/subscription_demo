@@ -165,6 +165,15 @@ class SubscriptionController extends GetxController {
     try {
       Loading.show();
 
+      final bool isAvailable = await InAppPurchase.instance.isAvailable();
+
+      printAction('----- isAvailable = $isAvailable');
+      if (!isAvailable) {
+        utils.showToast(message: 'The payment platform is not ready or not available in this device.');
+        Loading.dismiss();
+        return;
+      }
+
       Set<String> subscriptionIds = <String>{
         Platform.isAndroid ? 'monthly_plan' : "com.app.soakstream.monthlyplan",
         Platform.isAndroid ? 'yearly_plan' : "com.app.soakstream.yearlyplan",
@@ -356,6 +365,21 @@ class SubscriptionController extends GetxController {
     try {
       printAction("----- purchaseBottomSheet purchaseParam is null = ${purchaseParam == null}");
       if (purchaseParam != null) {
+        // First, check for any pending transactions
+        var purchases = await InAppPurchase.instance.purchaseStream.first;
+        if (purchases.isNotEmpty) {
+          for (var purchase in purchases) {
+            if (purchase.productID == planId && purchase.pendingCompletePurchase) {
+              printAction("----- Found pending transaction for $planId, completing it first");
+              await InAppPurchase.instance.completePurchase(purchase);
+              printAction("----- Completed pending transaction");
+              // Wait a moment for the completion to process
+              await Future.delayed(Duration(seconds: 1));
+            }
+          }
+        }
+
+        // Now attempt the new purchase
         await InAppPurchase.instance.buyNonConsumable(purchaseParam: purchaseParam);
         printAction("----- buyNonConsumable done");
       } else {
@@ -377,7 +401,26 @@ class SubscriptionController extends GetxController {
         printWarning("----- ");
 
         if (e.code == 'storekit_duplicate_product_object') {
-          utils.showToast(message: "You can't purchase this plan at the moment. Please try again later.");
+          // Try to complete any pending transactions
+          try {
+            var purchases = await InAppPurchase.instance.purchaseStream.first;
+            if (purchases.isNotEmpty) {
+              for (var purchase in purchases) {
+                if (purchase.productID == planId && purchase.pendingCompletePurchase) {
+                  printAction("----- Found pending transaction for $planId, completing it first");
+                  await InAppPurchase.instance.completePurchase(purchase);
+                  printAction("----- Completed pending transaction");
+                  // After completing, try the purchase again
+                  await Future.delayed(Duration(seconds: 1));
+                  await InAppPurchase.instance.buyNonConsumable(purchaseParam: purchaseParam!);
+                  return;
+                }
+              }
+            }
+          } catch (e) {
+            printError("Error completing pending transaction: $e");
+          }
+          utils.showToast(message: "Please wait a moment and try again.");
           return;
         }
 
