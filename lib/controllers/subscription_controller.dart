@@ -453,7 +453,7 @@ class SubscriptionController extends GetxController {
     printAction("list -----> length ------> ${list?.length}");
     if ((list?.length ?? 0) >= 2) list?.sort((a, b) => b.transactionDate!.compareTo(a.transactionDate!));
 
-    if (list == null) {
+    if (list == null || list.isEmpty) {
       apiRepeatCount++;
       printAction("----- apiRepeatCount = $apiRepeatCount ------");
       if (apiRepeatCount <= 2) purchasePlan(productItem);
@@ -484,6 +484,17 @@ class SubscriptionController extends GetxController {
       }
     }
 
+    if (utils.isValueEmpty(productId) || utils.isValueEmpty(originalTransactionId)) {
+      apiRepeatCount++;
+      printAction("----- apiRepeatCount = $apiRepeatCount ------");
+      if (apiRepeatCount <= 2) purchasePlan(productItem);
+      if (apiRepeatCount > 2) {
+        utils.showToast(message: 'Please tap on the restore button after some time.');
+        Loading.dismiss();
+      }
+      return;
+    }
+
     await getIt<SubscriptionService>()
         .applePlanPurchaseApi(
       amount: amount ?? '0',
@@ -499,7 +510,7 @@ class SubscriptionController extends GetxController {
 
         printSuccess("----- value.data?.planExpiry = ${value.data?.planExpiry}");
         printSuccess("SUCCESSS-=-=-=-=-=-=-=- applePlanPurchaseApi =-=-=--=-=-=-=-SUCCESSS");
-        utils.showToast(message: value.message ?? 'androidPlanPurchaseApi onSuccess');
+        utils.showToast(message: value.message ?? 'applePlanPurchaseApi onSuccess');
 
         tempCount.value++;
       },
@@ -741,8 +752,8 @@ class SubscriptionController extends GetxController {
                   user = value;
                   isPurchased = true;
 
-                  printSuccess("SUCCESSS-=-=-=-=-=-=-=-=-=-=--=-=-=-=-SUCCESSS");
-                  if (isShowToast) utils.showToast(message: value.message ?? 'androidPlanPurchaseApi onSuccess');
+                  printSuccess("SUCCESSS-=-=-=-=-=-=-=- androidPlanRestoreApi =-=-=--=-=-=-=-SUCCESSS");
+                  if (isShowToast) utils.showToast(message: value.message ?? 'androidPlanRestoreApi onSuccess');
 
                   tempCount.value++;
                 },
