@@ -100,7 +100,7 @@ class SubscriptionController extends GetxController {
         if (value.data?.isSubscription != '1') {
           apiRepeatCount = 0;
           // If user does not have any subscription plan so here we check if user has purchased any plan in the store and if user has any plan then we call the restore api
-          Platform.isAndroid ? restorePurchasePlanAndroid(isShowLoading: false) : restorePurchasePlan(isShowLoading: false);
+          Platform.isAndroid ? restorePurchasePlanAndroid(isShowToast: false) : restorePurchasePlan(isShowToast: false);
         }
 
         tempCount.value++;
@@ -345,6 +345,7 @@ class SubscriptionController extends GetxController {
     PurchaseParam? purchaseParam;
 
     printAction("----- response == null = ${response == null}");
+    printAction("----- stream == null = ${stream == null}");
     if (response == null) await fetchSubscriptions();
     if (stream == null) await subscriptionStream();
 
@@ -365,21 +366,24 @@ class SubscriptionController extends GetxController {
     try {
       printAction("----- purchaseBottomSheet purchaseParam is null = ${purchaseParam == null}");
       if (purchaseParam != null) {
-        // First, check for any pending transactions
-        var purchases = await InAppPurchase.instance.purchaseStream.first;
-        if (purchases.isNotEmpty) {
-          for (var purchase in purchases) {
-            if (purchase.productID == planId && purchase.pendingCompletePurchase) {
-              printAction("----- Found pending transaction for $planId, completing it first");
-              await InAppPurchase.instance.completePurchase(purchase);
-              printAction("----- Completed pending transaction");
-              // Wait a moment for the completion to process
-              await Future.delayed(Duration(seconds: 1));
+        if (Platform.isIOS) {
+          // First, check for any pending transactions
+          var purchases = await InAppPurchase.instance.purchaseStream.first.timeout(Duration(seconds: 10), onTimeout: () => []);
+          if (purchases.isNotEmpty) {
+            for (var purchase in purchases) {
+              if (purchase.productID == planId && purchase.pendingCompletePurchase) {
+                printAction("----- Found pending transaction for ${purchase.productID}, completing it first, status = ${purchase.status}");
+                await InAppPurchase.instance.completePurchase(purchase);
+                printAction("----- Completed pending transaction");
+                // Wait a moment for the completion to process
+                await Future.delayed(Duration(seconds: 1));
+              }
             }
           }
         }
 
         // Now attempt the new purchase
+        printAction("----- buyNonConsumable start");
         await InAppPurchase.instance.buyNonConsumable(purchaseParam: purchaseParam);
         printAction("----- buyNonConsumable done");
       } else {
@@ -493,7 +497,8 @@ class SubscriptionController extends GetxController {
         user = value;
         isPurchased = true;
 
-        printSuccess("SUCCESSS-=-=-=-=-=-=-=-=-=-=--=-=-=-=-SUCCESSS");
+        printSuccess("----- value.data?.planExpiry = ${value.data?.planExpiry}");
+        printSuccess("SUCCESSS-=-=-=-=-=-=-=- applePlanPurchaseApi =-=-=--=-=-=-=-SUCCESSS");
         utils.showToast(message: value.message ?? 'androidPlanPurchaseApi onSuccess');
 
         tempCount.value++;
@@ -556,14 +561,14 @@ class SubscriptionController extends GetxController {
     printAction("--- purchaseAndroidPlan api call end ");
   }
 
-  restorePurchasePlan({bool isShowLoading = true, bool isFromPurchase = false}) async {
+  restorePurchasePlan({bool isShowToast = true, bool isFromPurchase = false}) async {
     printAction("--- restorePurchasePlan api call start ");
-    printAction("--- isShowLoading = $isShowLoading --- isFromPurchase = $isFromPurchase");
+    printAction("--- isShowToast = $isShowToast --- isFromPurchase = $isFromPurchase");
 
     stream?.cancel();
     stream = null;
 
-    if (isShowLoading) Loading.show();
+    Loading.show();
 
     String? productId;
     String? appleTransactionId;
@@ -576,8 +581,9 @@ class SubscriptionController extends GetxController {
         onTimeout: () async {
           apiRepeatCount++;
           printAction("----- apiRepeatCount = $apiRepeatCount ------");
+          printAction("--- isShowToast = $isShowToast --- isFromPurchase = $isFromPurchase");
 
-          if (apiRepeatCount < 2) restorePurchasePlan(isShowLoading: isShowLoading);
+          if (apiRepeatCount < 2) restorePurchasePlan(isShowToast: isShowToast, isFromPurchase: isFromPurchase);
           return null;
         },
       ).then(
@@ -587,9 +593,10 @@ class SubscriptionController extends GetxController {
 
           if (list == null) {
             if (apiRepeatCount >= 2) {
-              if (isShowLoading) utils.showToast(message: "Please try again after some time.");
-              if (isShowLoading) Loading.dismiss();
+              if (!isFromPurchase && isShowToast) utils.showToast(message: "Please try again after some time.");
+              Loading.dismiss();
               apiRepeatCount = 0;
+              if (isFromPurchase) purchaseBottomSheet();
             }
             return;
           }
@@ -624,8 +631,8 @@ class SubscriptionController extends GetxController {
                 return;
               }
 
-              if (isShowLoading) utils.showToast(message: "Currently, you have no plans.");
-              if (isShowLoading) Loading.dismiss();
+              if (isShowToast) utils.showToast(message: "Currently, you have no plans.");
+              Loading.dismiss();
               return;
             }
 
@@ -638,13 +645,13 @@ class SubscriptionController extends GetxController {
             )
                 .handler(
               null,
-              isLoading: isShowLoading,
               onSuccess: (value) async {
                 user = value;
                 isPurchased = true;
 
-                printSuccess("SUCCESSS-=-=-=-=-=-=-=-=-=-=--=-=-=-=-SUCCESSS");
-                if (isShowLoading) utils.showToast(message: value.message ?? 'androidPlanPurchaseApi onSuccess');
+                printSuccess("----- value.data?.planExpiry = ${value.data?.planExpiry}");
+                printSuccess("SUCCESSS-=-=-=-=-=-=-=- applePlanRestoreApi =-=-=--=-=-=-=-SUCCESSS");
+                if (isShowToast) utils.showToast(message: value.message ?? 'applePlanRestoreApi onSuccess');
 
                 tempCount.value++;
               },
@@ -657,11 +664,11 @@ class SubscriptionController extends GetxController {
                 }
 
                 if (value.statusCode == 404) {
-                  if (isShowLoading) utils.showToast(message: "Currently, you have no plans.");
+                  if (isShowToast) utils.showToast(message: "Currently, you have no plan.");
                   return;
                 }
 
-                if (isShowLoading) utils.showToast(isError: true, message: value.error.description);
+                if (isShowToast) utils.showToast(isError: true, message: value.error.description);
               },
             );
           } else {
@@ -670,21 +677,21 @@ class SubscriptionController extends GetxController {
               return;
             }
 
-            if (isShowLoading) utils.showToast(message: "Currently, you have no plans");
-            if (isShowLoading) Loading.dismiss();
+            if (isShowToast) utils.showToast(message: "Currently, you have no plans");
+            Loading.dismiss();
           }
         },
       );
     } catch (e) {
       printError("-----eeeeeee5555555=$e");
-      if (isShowLoading) Loading.dismiss();
-      if (isShowLoading) utils.showToast(message: "$e", isError: true);
+      Loading.dismiss();
+      if (isShowToast) utils.showToast(message: "$e", isError: true);
     } finally {
-      if (isShowLoading) Loading.dismiss();
+      Loading.dismiss();
     }
   }
 
-  restorePurchasePlanAndroid({bool isShowLoading = true}) async {
+  restorePurchasePlanAndroid({bool isShowToast = true}) async {
     printAction("--- restorePurchasePlanAndroid api call start ");
 
     stream?.cancel();
@@ -692,7 +699,7 @@ class SubscriptionController extends GetxController {
 
     String? purchaseToken;
     String? productId;
-    if (isShowLoading) Loading.show();
+    Loading.show();
 
     try {
       await FlutterInappPurchase.instance.getAvailablePurchases().timeout(
@@ -701,7 +708,7 @@ class SubscriptionController extends GetxController {
           apiRepeatCount++;
           printAction("----- apiRepeatCount = $apiRepeatCount ------");
 
-          if (apiRepeatCount < 2) restorePurchasePlanAndroid(isShowLoading: isShowLoading);
+          if (apiRepeatCount < 2) restorePurchasePlanAndroid(isShowToast: isShowToast);
           return null;
         },
       ).then(
@@ -730,37 +737,36 @@ class SubscriptionController extends GetxController {
               )
                   .handler(
                 null,
-                isLoading: isShowLoading,
                 onSuccess: (value) async {
                   user = value;
                   isPurchased = true;
 
                   printSuccess("SUCCESSS-=-=-=-=-=-=-=-=-=-=--=-=-=-=-SUCCESSS");
-                  if (isShowLoading) utils.showToast(message: value.message ?? 'androidPlanPurchaseApi onSuccess');
+                  if (isShowToast) utils.showToast(message: value.message ?? 'androidPlanPurchaseApi onSuccess');
 
                   tempCount.value++;
                 },
                 onFailed: (value) async {
-                  if (isShowLoading) utils.showToast(isError: true, message: value.error.description);
+                  if (isShowToast) utils.showToast(isError: true, message: value.error.description);
                   tempCount.value++;
                 },
               );
             } else {
-              if (isShowLoading) Loading.dismiss();
-              if (isShowLoading) utils.showToast(message: "Currently, you have no plan");
+              Loading.dismiss();
+              if (isShowToast) utils.showToast(message: "Currently, you have no plan");
             }
           } else {
-            if (isShowLoading) Loading.dismiss();
-            if (isShowLoading) utils.showToast(message: "Currently, you have no plans");
+            Loading.dismiss();
+            if (isShowToast) utils.showToast(message: "Currently, you have no plans");
           }
         },
       );
     } catch (e) {
       printError("-----eeeeeee4444444=$e");
-      if (isShowLoading) Loading.dismiss();
-      if (isShowLoading) utils.showToast(message: "$e", isError: true);
+      Loading.dismiss();
+      if (isShowToast) utils.showToast(message: "$e", isError: true);
     } finally {
-      if (isShowLoading) Loading.dismiss();
+      Loading.dismiss();
     }
   }
 

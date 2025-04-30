@@ -40,3 +40,8 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation "com.android.billingclient:billing:7.0.0"
+    implementation 'com.android.support:multidex:1.0.3'
+}
