@@ -357,7 +357,7 @@ class SubscriptionController extends GetxController {
         printWarning("----- response?.productDetails[i].id.trim() == planId = ${response?.productDetails[i].id.trim() == planId}");
         printWarning("----- user.data?.id = ${user.data?.id}");
 
-        purchaseParam = PurchaseParam(productDetails: response!.productDetails[i], applicationUserName: '${user.data?.id}#dev');
+        purchaseParam = PurchaseParam(productDetails: response!.productDetails[i], applicationUserName: user.data?.id);
         printAction("----- purchaseBottomSheet purchaseParam.productDetails.id = ${purchaseParam.productDetails.id}");
         break;
       }
